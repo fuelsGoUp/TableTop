@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <string.h>
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
@@ -12,12 +13,13 @@ int main() {
     struct sockaddr_in address;
     int addrlen = sizeof(address);
     char buffer[BUFFER_SIZE] = {0};
-    const char *response =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: 13\r\n"
-        "\r\n"
-        "Mensagem enviada com sucesso!\n";
+    char response[100];
+    //=
+    //    "HTTP/1.1 200 OK\r\n"
+    //    "Content-Type: text/plain\r\n"
+    //    "Content-Length: 31\r\n"
+    //    "\r\n"
+    //    "Mensagem enviada com sucesso!\n";
 
     // Criando o socket
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
@@ -46,6 +48,8 @@ int main() {
 
     printf("Servidor HTTP iniciado na porta %d...\n", PORT);
 
+    
+
     // Loop para aceitar conexões
     while (1) {
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0) {
@@ -53,15 +57,34 @@ int main() {
             continue;
         }
 
+        while(1) {
+            strcpy(response, "Voce enviou: ");
+
+            memset(buffer, 0, BUFFER_SIZE);
+
+            int bytes = read(new_socket, buffer, BUFFER_SIZE - 1);
+
+            if (bytes <= 0) {
+                // Cliente fechou a conexão ou ocorreu um erro
+                break;
+            }
+
+            printf("Requisição recebida:\n%s\n", buffer);
+
+            strcat(response, buffer);
+
+            write(new_socket, response, strlen(response));
+        }
+
         // Lendo a solicitação do cliente (opcional, dependendo do uso)
         read(new_socket, buffer, BUFFER_SIZE);
         printf("Requisição recebida:\n%s\n", buffer);
 
         // Enviando a resposta HTTP
-        write(new_socket, response, strlen(response));
+        //write(new_socket, response, strlen(response));
 
         // Fechando o socket do cliente
-        //close(new_socket);
+        close(new_socket);
     }
 
     // Fechando o socket do servidor
