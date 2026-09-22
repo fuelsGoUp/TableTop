@@ -42,3 +42,113 @@ void rolar_dado(int socket)
 
     printf("%s", mensagem);
 }
+
+int main()
+{
+    int client_socket;
+
+    struct sockaddr_in server_address;
+
+    char buffer[BUFFER_SIZE];
+
+    srand(time(NULL));
+
+    /*
+     * Criando socket
+     */
+    client_socket = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (client_socket < 0) {
+        perror("Erro ao criar socket");
+        exit(EXIT_FAILURE);
+    }
+
+    /*
+     * Configurando endereco do servidor
+     */
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(PORT);
+
+    /*
+     * IP do servidor
+     */
+    if (inet_pton(
+            AF_INET,
+            "127.0.0.1",
+            &server_address.sin_addr
+        ) <= 0) {
+
+        perror("Endereco invalido");
+        close(client_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    /*
+     * Conectando ao servidor
+     */
+    if (connect(
+            client_socket,
+            (struct sockaddr *)&server_address,
+            sizeof(server_address)
+        ) < 0) {
+
+        perror("Erro ao conectar");
+        close(client_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Conectado ao servidor!\n");
+
+    int opcao;
+
+    while (1) {
+
+        printf("\n");
+        printf("===== VIRTUAL TABLETOP =====\n");
+        printf("1 - Enviar mensagem\n");
+        printf("2 - Rolar dado\n");
+        printf("3 - Sair\n");
+        printf("Escolha: ");
+
+        scanf("%d", &opcao);
+
+        /*
+         * Limpa o '\n' deixado pelo scanf
+         */
+        getchar();
+
+        if (opcao == 1) {
+
+            printf("Mensagem: ");
+
+            fgets(buffer, BUFFER_SIZE, stdin);
+
+            buffer[strcspn(buffer, "\n")] = '\0';
+
+            enviar_mensagem(client_socket, buffer);
+
+        }
+
+        else if (opcao == 2) {
+
+            rolar_dado(client_socket);
+
+        }
+
+        else if (opcao == 3) {
+
+            printf("Desconectando...\n");
+            break;
+
+        }
+
+        else {
+
+            printf("Opcao invalida.\n");
+        }
+    }
+
+    close(client_socket);
+
+    return 0;
+}
