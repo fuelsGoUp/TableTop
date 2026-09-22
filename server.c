@@ -3,91 +3,167 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <string.h>
+#include <sys/select.h>
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
+#define MAX_CLIENTS 2
 
 int main() {
-    int server_fd, new_socket;
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
-    char buffer[BUFFER_SIZE] = {0};
-    char response[100];
-    //=
-    //    "HTTP/1.1 200 OK\r\n"
-    //    "Content-Type: text/plain\r\n"
-    //    "Content-Length: 31\r\n"
-    //    "\r\n"
-    //    "Mensagem enviada com sucesso!\n";
+    int server_fd;
+    int clients[MAX_CLIENTS] = {0};
 
-    // Criando o socket
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("Erro ao criar o socket");
+    struct sockaddr_in address;
+
+    char buffer[BUFFER_SIZE];
+    char saida_chat[BUFFER_SIZE];
+
+    // Criando socket do servidor
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (server_fd < 0) {
+        perror("Erro ao criar socket");
         exit(EXIT_FAILURE);
     }
 
-    // Configurando o endereço do servidor
+    // Configurando endereço
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(PORT);
 
-    // Ligando o socket ao endereço e porta
+    // Bind
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("Erro ao associar o socket");
+        perror("Erro no bind");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
 
-    // Colocando o socket em modo de escuta
-    if (listen(server_fd, 3) < 0) {
-        perror("Erro ao escutar");
+    // Listen
+    if (listen(server_fd, 2) < 0) {
+        perror("Erro no listen");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
 
-    printf("Servidor HTTP iniciado na porta %d...\n", PORT);
+    printf("Servidor iniciado na porta %d\n", PORT);
 
-    
-
-    // Loop para aceitar conexões
     while (1) {
-        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0) {
-            perror("Erro ao aceitar conexão");
-            continue;
+
+        fd_set readfds;
+
+        FD_ZERO(&readfds);
+
+        // Coloca o socket do servidor no conjunto
+        FD_SET(server_fd, &readfds);
+
+        int max_fd = server_fd;
+
+        // Coloca os clientes no conjunto
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i] > 0) {
+                FD_SET(clients[i], &readfds);
+
+                if (clients[i] > max_fd) {
+                    max_fd = clients[i];
+                }
+            }
         }
 
-        while(1) {
-            strcpy(response, "Voce enviou: ");
+        // Espera algum socket receber dados
+        int activity = select(max_fd + 1, &readfds, NULL, NULL, NULL);
 
-            memset(buffer, 0, BUFFER_SIZE);
+        if (activity < 0) {
+            perror("Erro no select");
+            break;
+        }
 
-            int bytes = read(new_socket, buffer, BUFFER_SIZE - 1);
+        /*
+         * Verifica se alguém está tentando
+         * estabelecer uma nova conexão.
+         */
+        if (FD_ISSET(server_fd, &readfds)) {
 
-            if (bytes <= 0) {
-                // Cliente fechou a conexão ou ocorreu um erro
-                break;
+            int new_socket = accept(server_fd, NULL, NULL);
+
+            if (new_socket < 0) {
+                perror("Erro no accept");
+                continue;
             }
 
-            printf("Requisição recebida:\n%s\n", buffer);
+            // Procurando espaço para o cliente
+            int added = 0;
 
-            strcat(response, buffer);
+            for (int i = 0; i < MAX_CLIENTS; i++) {
 
-            write(new_socket, response, strlen(response));
+                if (clients[i] == 0) {
+
+                    clients[i] = new_socket;
+
+                    printf("Cliente %d conectado.\n", i + 1);
+
+                    added = 1;
+                    break;
+                }
+            }
+
+            // Se já temos dois clientes
+            if (!added) {
+                printf("Servidor cheio.\n");
+                close(new_socket);
+            }
         }
 
-        // Lendo a solicitação do cliente (opcional, dependendo do uso)
-        read(new_socket, buffer, BUFFER_SIZE);
-        printf("Requisição recebida:\n%s\n", buffer);
+        /*
+         * Verifica se algum cliente enviou mensagem.
+         */
+        for (int i = 0; i < MAX_CLIENTS; i++) {
 
-        // Enviando a resposta HTTP
-        //write(new_socket, response, strlen(response));
+            int client = clients[i];
 
-        // Fechando o socket do cliente
-        close(new_socket);
+            if (client == 0)
+                continue;
+
+            if (FD_ISSET(client, &readfds)) {
+
+                memset(buffer, 0, BUFFER_SIZE);
+
+                int bytes = read(client, buffer, BUFFER_SIZE - 1);
+
+                if (bytes <= 0) {
+
+                    printf("Cliente %d desconectou.\n", i + 1);
+
+                    close(client);
+                    clients[i] = 0;
+
+                    continue;
+                }
+
+                buffer[bytes] = '\0';
+
+                printf("Cliente %d: %s\n", i + 1, buffer);
+
+                /*
+                 * Envia a mensagem para o OUTRO cliente.
+                 */
+                for (int j = 0; j < MAX_CLIENTS; j++) {
+
+                    if (j != i && clients[j] != 0) {
+
+                        snprintf(saida_chat, sizeof(saida_chat), "Usuario %d:", j);
+                        strcat(saida_chat, buffer);
+
+                        write(
+                            clients[j],
+                            saida_chat,
+                            strlen(saida_chat)
+                        );
+                    }
+                }
+            }
+        }
     }
 
-    // Fechando o socket do servidor
     close(server_fd);
 
     return 0;
