@@ -4,10 +4,19 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include <time.h>
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
 #define MAX_CLIENTS 2
+
+int roll (int sides){
+    srand(time(NULL));
+
+    int result = (rand() % sides) + 1;
+    
+    return result;
+}
 
 int main() {
     int server_fd;
@@ -17,6 +26,7 @@ int main() {
 
     char buffer[BUFFER_SIZE];
     char saida_chat[BUFFER_SIZE];
+    int resultado_rolagem;
 
     // Criando socket do servidor
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -148,9 +158,31 @@ int main() {
                  */
                 for (int j = 0; j < MAX_CLIENTS; j++) {
 
+                    if (strstr(buffer, "/roll d20") != NULL){
+                        snprintf(buffer, sizeof(buffer), "\nRolou(d20): %d\n", roll(20));
+                        write(clients[i], buffer, strlen(buffer));
+                    } else if (strstr(buffer, "/roll d12") != NULL){
+                        snprintf(buffer, sizeof(buffer), "\nRolou(d12): %d\n", roll(12));
+                        write(clients[i], buffer, strlen(buffer));
+                    } else if (strstr(buffer, "/roll d10") != NULL){
+                        snprintf(buffer, sizeof(buffer), "\nRolou(d10): %d\n", roll(10));
+                        write(clients[i], buffer, strlen(buffer));
+                    } else if (strstr(buffer, "/roll d8") != NULL){
+                        snprintf(buffer, sizeof(buffer), "\nRolou(d8): %d\n", roll(8));
+                        write(clients[i], buffer, strlen(buffer));
+                    } else if (strstr(buffer, "/roll d6") != NULL){
+                        snprintf(buffer, sizeof(buffer), "\nRolou(d6): %d\n", roll(6));
+                        write(clients[i], buffer, strlen(buffer));
+                    } else if (strstr(buffer, "/roll d4") != NULL){
+                        snprintf(buffer, sizeof(buffer), "\nRolou(d4): %d\n", roll(4));
+                        write(clients[i], buffer, strlen(buffer));
+                    }
+
                     if (j != i && clients[j] != 0) {
 
-                        snprintf(saida_chat, sizeof(saida_chat), "Usuario %d:", j);
+                        
+
+                        snprintf(saida_chat, sizeof(saida_chat), "Usuario %d: ", j);
                         strcat(saida_chat, buffer);
 
                         write(
